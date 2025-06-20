@@ -1,4 +1,4 @@
-name: API CI - RealEstate
+name: CI/CD Pipeline
 
 on:
   push:
@@ -7,42 +7,55 @@ on:
     branches: [main]
 
 jobs:
-  test:
-    name: Test API en Node.js ${{ matrix.node }}
+  build-test-analyze-deploy:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node: [18.x, 20.x]
+    env:
+      NODE_ENV: development
 
     steps:
-      - name: Checkout del código
+      - name: Checkout código
         uses: actions/checkout@v4
 
       - name: Configurar Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v3
         with:
-          node-version: ${{ matrix.node }}
-
-      - name: Cache de Yarn
-        uses: actions/cache@v4
-        with:
-          path: |
-            .yarn/cache
-            node_modules
-          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-yarn-
+          node-version: '18'
+          cache: 'yarn'
 
       - name: Instalar dependencias con Yarn
         run: yarn install --frozen-lockfile
 
-      - name: Ejecutar pruebas
-        run: yarn test
+      - name: Ejecutar pruebas con cobertura
+        run: yarn test --coverage
 
-      - name: Reportar éxito
-        if: success()
-        run: echo "✅ API funcional en Node.js ${{ matrix.node }}"
+      - name: Verificar existencia del archivo lcov
+        run: test -f coverage/lcov.info
 
-      - name: Reportar error
-        if: failure()
-        run: echo "❌ Falla en los tests para Node.js ${{ matrix.node }}"
+      - name: Ejecutar linter
+        run: yarn lint
+
+      - name: Análisis de seguridad (yarn audit)
+        run: yarn audit --level moderate || true
+
+      - name: Análisis estático con SonarQube
+        env:
+          SONAR_TOKEN: ${{ secrets.TOKEN_APP }}
+        run: |
+          yarn global add sonarqube-scanner
+          sonar-scanner \
+            -Dsonar.projectKey=kamivillabla_realestate-api \
+            -Dsonar.organization=kamivillabla \
+            -Dsonar.sources=. \
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
+            -Dsonar.login=$SONAR_TOKEN
+
+      - name: Despliegue a entorno de staging
+        env:
+          TOKEN_APP: ${{ secrets.TOKEN_APP }}
+        run: |
+          echo "Desplegando a entorno de pruebas (staging)..."
+          curl -X POST https://api.transchile.cl/staging-deploy \
+            -H "Authorization: Bearer $TOKEN_APP" \
+            -H "Content-Type: application/json" \
+            -d '{"version": "latest", "env": "staging"}'
