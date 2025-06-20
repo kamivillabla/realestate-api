@@ -1,0 +1,48 @@
+name: API CI - RealEstate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Test API en Node.js ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [18.x, 20.x]
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Cache de Yarn
+        uses: actions/cache@v4
+        with:
+          path: |
+            .yarn/cache
+            node_modules
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
+
+      - name: Instalar dependencias con Yarn
+        run: yarn install --frozen-lockfile
+
+      - name: Ejecutar pruebas
+        run: yarn test
+
+      - name: Reportar éxito
+        if: success()
+        run: echo "✅ API funcional en Node.js ${{ matrix.node }}"
+
+      - name: Reportar error
+        if: failure()
+        run: echo "❌ Falla en los tests para Node.js ${{ matrix.node }}"
