@@ -8,7 +8,8 @@
   },
   "scripts": {
     "start": "node src/app.js",
-    "test": "jest"
+    "test": "jest --coverage",
+    "lint": "eslint ."
   },
   "devDependencies": {
     "jest": "^30.0.2",
